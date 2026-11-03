@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 import { v4 as uuidv4 } from 'uuid'
 import ExcelJS from 'exceljs'
 import { parseExcelWorkbook, type ImportPreview, type ParsedStudent, type ParsedResponse } from './excel-import'
@@ -22,8 +23,8 @@ import type {
   FollowUpStatus,
 } from '@/types/database'
 
-const isVercel = !!process.env.VERCEL
-const DATA_DIR = isVercel ? path.join('/tmp', '.data') : path.join(process.cwd(), '.data')
+// Always use the operating system's writable temp directory (guaranteed writable on Vercel /tmp, Windows %TEMP%, Linux)
+const DATA_DIR = path.join(os.tmpdir(), 'nirf-data')
 const DB_FILE = path.join(DATA_DIR, 'db.json')
 const SEED_FILE = path.join(process.cwd(), '.data', 'db.json')
 
