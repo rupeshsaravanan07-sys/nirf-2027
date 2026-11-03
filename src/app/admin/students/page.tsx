@@ -571,7 +571,8 @@ export default function StudentsDirectoryPage() {
 
                             {/* Inline Image Preview if file is an image */}
                             {(sub.evidence_storage_path.match(/\.(jpeg|jpg|png|webp|svg)($|\?)/i) ||
-                              sub.evidence_storage_path.startsWith('/uploads/')) && (
+                              sub.evidence_storage_path.startsWith('/uploads/') ||
+                              sub.evidence_storage_path.startsWith('data:image/')) && (
                               <div className="mt-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg border flex flex-col items-start gap-1">
                                 <span className="text-[10px] text-slate-500 font-mono">Document Preview:</span>
                                 <div className="max-h-48 overflow-hidden rounded border bg-white dark:bg-slate-900 w-full flex justify-center">

@@ -153,8 +153,31 @@ function saveDB() {
 // Initialize database
 export async function initializeDataStore(): Promise<void> {
   const db = loadDB()
-  if (db.initialized) return
+  if (db.initialized && db.students.length > 0) return
   db.initialized = true
+
+  try {
+    const supabase = createAdminClient()
+    if (supabase) {
+      if (db.students.length === 0) {
+        const { data: supaStudents } = await (supabase.from('students') as any).select('*')
+        if (supaStudents && supaStudents.length > 0) {
+          db.students = supaStudents
+        }
+      }
+      const { data: supaSubs } = await (supabase.from('progression_submissions') as any).select('*')
+      if (supaSubs && supaSubs.length > 0) {
+        for (const s of supaSubs) {
+          if (!db.submissions.some((sub) => sub.id === s.id)) {
+            db.submissions.push(s)
+          }
+        }
+      }
+    }
+  } catch (err) {
+    // Supabase unavailable, continue with local db
+  }
+
   saveDB()
 }
 
@@ -715,11 +738,31 @@ export async function getStudentByToken(token: string): Promise<{
   await initializeDataStore()
   const db = loadDB()
 
-  const student = db.students.find((s) => s.form_access_token === token)
+  let student = db.students.find((s) => s.form_access_token === token)
+  if (!student) {
+    try {
+      const supabase = createAdminClient()
+      if (supabase) {
+        const { data } = await (supabase.from('students') as any)
+          .select('*')
+          .eq('form_access_token', token)
+          .maybeSingle()
+        if (data) {
+          student = data as Student
+          if (!db.students.find((s) => s.id === student!.id)) {
+            db.students.push(student)
+          }
+        }
+      }
+    } catch (e) {
+      // Supabase unavailable
+    }
+  }
+
   if (!student) return { student: null, existing_submission: null }
 
   const subs = db.submissions
-    .filter((s) => s.student_id === student.id)
+    .filter((s) => s.student_id === student!.id)
     .sort((a, b) => b.submission_version - a.submission_version)
 
   return {
@@ -843,6 +886,32 @@ export async function submitStudentProgression(data: {
 
   saveDB()
 
+  // Sync submission to Supabase PostgreSQL
+  try {
+    const supabase = createAdminClient()
+    if (supabase) {
+      await (supabase.from('progression_submissions') as any).insert({
+        id: newSub.id,
+        student_id: newSub.student_id,
+        submission_version: newSub.submission_version,
+        outcome_category: newSub.outcome_category,
+        employment_details: newSub.employment_details,
+        higher_studies_details: newSub.higher_studies_details,
+        entrepreneurship_details: newSub.entrepreneurship_details,
+        internship_details: newSub.internship_details,
+        other_details: newSub.other_details,
+        evidence_storage_path: newSub.evidence_storage_path,
+        declaration_accepted: newSub.declaration_accepted,
+        submitted_at: newSub.submitted_at,
+        submission_reference: newSub.submission_reference,
+        verification_status: newSub.verification_status,
+        admin_notes: newSub.admin_notes,
+      })
+    }
+  } catch (syncErr) {
+    console.error('Error syncing submission to Supabase:', syncErr)
+  }
+
   return {
     success: true,
     submission_reference: refCode,
@@ -869,6 +938,25 @@ export async function updateSubmissionVerification(
   sub.updated_at = new Date().toISOString()
 
   saveDB()
+
+  // Sync updated status to Supabase PostgreSQL
+  try {
+    const supabase = createAdminClient()
+    if (supabase) {
+      await (supabase.from('progression_submissions') as any)
+        .update({
+          verification_status: status,
+          admin_notes: adminNotes !== undefined ? adminNotes : sub.admin_notes,
+          verified_by: verifiedBy,
+          verified_at: sub.verified_at,
+          updated_at: sub.updated_at,
+        })
+        .eq('id', submissionId)
+    }
+  } catch (syncErr) {
+    console.error('Error syncing verification update to Supabase:', syncErr)
+  }
+
   return true
 }
 
