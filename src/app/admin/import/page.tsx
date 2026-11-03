@@ -21,6 +21,14 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useToast } from "@/components/ui/use-toast"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import type { ImportPreview } from "@/lib/excel-import"
 
 export default function ExcelImportPage() {
@@ -32,6 +40,8 @@ export default function ExcelImportPage() {
   const [committing, setCommitting] = React.useState(false)
   const [commitResult, setCommitResult] = React.useState<any>(null)
   const [dragActive, setDragActive] = React.useState(false)
+  const [overwriteMode, setOverwriteMode] = React.useState(false)
+  const [confirmDialogOpen, setConfirmDialogOpen] = React.useState(false)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -95,7 +105,17 @@ export default function ExcelImportPage() {
 
   const handleConfirmImport = async () => {
     if (!preview) return
+    if (overwriteMode) {
+      setConfirmDialogOpen(true)
+      return
+    }
+    executeCommit(false)
+  }
+
+  const executeCommit = async (overwrite: boolean) => {
+    if (!preview) return
     setCommitting(true)
+    setConfirmDialogOpen(false)
 
     try {
       const res = await fetch("/api/admin/import/confirm", {
@@ -104,6 +124,7 @@ export default function ExcelImportPage() {
         body: JSON.stringify({
           preview,
           uploadedBy: "NIRF Admin Staff",
+          overwrite,
         }),
       })
 
@@ -112,7 +133,7 @@ export default function ExcelImportPage() {
 
       setCommitResult(data)
       toast({
-        title: "Import Committed Successfully!",
+        title: overwrite ? "Dataset Replaced & Initialized!" : "Import Committed Successfully!",
         description: data.message,
         variant: "success",
       })
@@ -288,6 +309,52 @@ export default function ExcelImportPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
+              {/* Import Mode Selector */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="font-bold text-sm text-slate-900 dark:text-slate-100 block">
+                      Import Operation Mode:
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      Choose whether to merge into your current cohort or completely replace existing data for a new cohort (e.g. NIRF 2028).
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={!overwriteMode ? "default" : "outline"}
+                      className={!overwriteMode ? "bg-blue-600 hover:bg-blue-700 text-white text-xs h-8" : "text-xs h-8"}
+                      onClick={() => setOverwriteMode(false)}
+                    >
+                      Append & Merge
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={overwriteMode ? "destructive" : "outline"}
+                      className={overwriteMode ? "bg-rose-600 hover:bg-rose-700 text-white text-xs h-8" : "text-xs h-8 text-rose-600 border-rose-200 hover:bg-rose-50"}
+                      onClick={() => setOverwriteMode(true)}
+                    >
+                      Erase Old Data & Start Fresh Cohort
+                    </Button>
+                  </div>
+                </div>
+
+                {overwriteMode && (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-lg border border-rose-200 text-rose-800 dark:text-rose-300 text-xs flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
+                    <div>
+                      <p className="font-semibold">Fresh Cohort Replacement Active</p>
+                      <p className="text-[11px] text-rose-700/90 dark:text-rose-300/90">
+                        When you click Confirm, all existing students, responses, reminders, and escalations will be completely erased. A confirmation pop-up will verify your decision before proceeding.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Stats Highlights */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-3.5 bg-slate-50 dark:bg-slate-900 rounded-xl border">
@@ -378,6 +445,56 @@ export default function ExcelImportPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+      {/* Erase & Replace Confirmation Dialog */}
+      {preview && (
+        <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-rose-600 flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" />
+                Erase Old Data & Import Fresh Cohort?
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-600 dark:text-slate-400 space-y-2 pt-2 text-left">
+                <p>
+                  You are about to permanently erase <strong>all current students, previous submissions, reminders, and proctor escalations</strong> from your database.
+                </p>
+                <p className="p-2 bg-slate-100 dark:bg-slate-800 rounded font-medium text-slate-900 dark:text-slate-100">
+                  New file: <span className="font-mono text-blue-600">{preview.filename}</span> ({preview.total_students} students) will become your sole active cohort dataset.
+                </p>
+                <p className="text-rose-600 font-semibold pt-1">
+                  This action cannot be undone. Are you sure you want to proceed?
+                </p>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmDialogOpen(false)}
+                disabled={committing}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={committing}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+                onClick={() => executeCommit(true)}
+              >
+                {committing ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    Erasing & Importing...
+                  </>
+                ) : (
+                  'Yes, Erase Old Data & Import'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )

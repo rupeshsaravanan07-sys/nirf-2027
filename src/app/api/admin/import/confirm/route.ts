@@ -5,13 +5,17 @@ import type { ImportPreview } from '@/lib/excel-import'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { preview, uploadedBy } = body as { preview: ImportPreview; uploadedBy?: string }
+    const { preview, uploadedBy, overwrite } = body as {
+      preview: ImportPreview
+      uploadedBy?: string
+      overwrite?: boolean
+    }
 
     if (!preview || !preview.students) {
       return NextResponse.json({ error: 'Missing import preview data' }, { status: 400 })
     }
 
-    const result = await commitImportPreview(preview, uploadedBy || 'Admin Staff')
+    const result = await commitImportPreview(preview, uploadedBy || 'Admin Staff', !!overwrite)
 
     return NextResponse.json({
       success: true,

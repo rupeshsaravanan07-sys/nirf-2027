@@ -22,8 +22,10 @@ import type {
   FollowUpStatus,
 } from '@/types/database'
 
-const DATA_DIR = path.join(process.cwd(), '.data')
+const isVercel = !!process.env.VERCEL
+const DATA_DIR = isVercel ? path.join('/tmp', '.data') : path.join(process.cwd(), '.data')
 const DB_FILE = path.join(DATA_DIR, 'db.json')
+const SEED_FILE = path.join(process.cwd(), '.data', 'db.json')
 
 interface InMemoryDB {
   students: Student[]
@@ -53,6 +55,8 @@ function ensureDataDir() {
 function loadDB(): InMemoryDB {
   if (memoryDB) return memoryDB
   ensureDataDir()
+  
+  // 1. Try loading from writable DB_FILE (/tmp on Vercel, or local .data)
   if (fs.existsSync(DB_FILE)) {
     try {
       const content = fs.readFileSync(DB_FILE, 'utf-8')
@@ -60,6 +64,18 @@ function loadDB(): InMemoryDB {
       return memoryDB!
     } catch (e) {
       console.error('Failed to parse db.json, re-initializing...', e)
+    }
+  }
+
+  // 2. If running on Vercel and /tmp doesn't have it yet, seed from project repository
+  if (fs.existsSync(SEED_FILE)) {
+    try {
+      const content = fs.readFileSync(SEED_FILE, 'utf-8')
+      memoryDB = JSON.parse(content)
+      saveDB()
+      return memoryDB!
+    } catch (e) {
+      console.error('Failed to parse seed db.json...', e)
     }
   }
 
@@ -73,7 +89,7 @@ function loadDB(): InMemoryDB {
     templates: [
       {
         id: uuidv4(),
-        name: 'Default NIRF 2027 Reminder',
+        name: 'Default NIRF Reminder',
         template_text: DEFAULT_WHATSAPP_TEMPLATE,
         is_default: true,
       },
@@ -115,13 +131,42 @@ export async function initializeDataStore(): Promise<void> {
   }
 }
 
-export async function commitImportPreview(preview: ImportPreview, uploadedBy: string = 'Admin'): Promise<{
+export async function commitImportPreview(
+  preview: ImportPreview,
+  uploadedBy: string = 'Admin',
+  overwrite: boolean = false
+): Promise<{
   imported_students: number
   imported_responses: number
   import_log_id: string
 }> {
   const db = loadDB()
   const importLogId = uuidv4()
+
+  // If overwrite mode is chosen: clear all existing data first
+  if (overwrite) {
+    try {
+      const supabase = createAdminClient()
+      if (supabase) {
+        // Delete child tables in reverse foreign-key order
+        await supabase.from('proctor_escalations').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+        await supabase.from('communication_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+        await supabase.from('reminders').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+        await supabase.from('progression_submissions').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+        await supabase.from('original_responses').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+        await supabase.from('students').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      }
+    } catch (clearErr) {
+      console.error('Error clearing old records from Supabase on overwrite:', clearErr)
+    }
+
+    db.students = []
+    db.submissions = []
+    db.original_responses = []
+    db.reminders = []
+    db.communication_logs = []
+    db.escalations = []
+  }
 
   const studentMap = new Map<string, Student>()
   for (const s of db.students) {
