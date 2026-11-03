@@ -112,24 +112,12 @@ function saveDB() {
   }
 }
 
-// Initialize database with the provided Excel file if not already initialized
+// Initialize database
 export async function initializeDataStore(): Promise<void> {
   const db = loadDB()
-  if (db.initialized && db.students.length > 0) return
-
-  const samplePath = path.join(process.cwd(), 'public', 'NIRF_2027_Responses.xlsx')
-  if (fs.existsSync(samplePath)) {
-    try {
-      const buffer = fs.readFileSync(samplePath)
-      const parsed = await parseExcelWorkbook(buffer, 'NIRF 2027 – Student Progression Data Collection (Responses).xlsx')
-      await commitImportPreview(parsed, 'System Initial Import')
-      db.initialized = true
-      saveDB()
-      console.log(`[DataStore] Initialized with ${db.students.length} students and ${db.original_responses.length} responses.`)
-    } catch (err) {
-      console.error('[DataStore] Error during initial workbook parse:', err)
-    }
-  }
+  if (db.initialized) return
+  db.initialized = true
+  saveDB()
 }
 
 export async function commitImportPreview(
