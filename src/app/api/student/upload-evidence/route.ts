@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import path from 'path'
 import fs from 'fs'
 import { v4 as uuidv4 } from 'uuid'
+import { createAdminClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,24 +23,49 @@ export async function POST(request: NextRequest) {
     const cleanReg = regNo.replace(/[^a-zA-Z0-9]/g, '')
     const filename = `${cleanReg}_${uuidv4().substring(0, 8)}${ext}`
     const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    const mime = file.type || 'application/octet-stream'
 
     let publicUrl = ''
 
-    // Attempt local file write (works on local dev)
+    // 1. Try uploading to Supabase Cloud Storage (permanent across all lambdas & sessions)
     try {
-      const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true })
+      const supabase = createAdminClient()
+      if (supabase) {
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('nirf-evidence')
+          .upload(filename, buffer, {
+            contentType: mime,
+            upsert: true,
+          })
+
+        if (!uploadErr && uploadData) {
+          const { data: urlData } = supabase.storage
+            .from('nirf-evidence')
+            .getPublicUrl(filename)
+          if (urlData?.publicUrl) {
+            publicUrl = urlData.publicUrl
+          }
+        }
       }
-      const destPath = path.join(uploadsDir, filename)
-      fs.writeFileSync(destPath, Buffer.from(arrayBuffer))
-      publicUrl = `/uploads/${filename}`
-    } catch (fsErr) {
-      // In serverless / Vercel cloud with read-only filesystem:
-      // Store as clean base64 data URL so it renders instantly in <img> and download links
-      const mime = file.type || 'application/octet-stream'
-      const base64 = Buffer.from(arrayBuffer).toString('base64')
-      publicUrl = `data:${mime};base64,${base64}`
+    } catch (storageErr) {
+      console.warn('Supabase storage upload fallback:', storageErr)
+    }
+
+    // 2. If Supabase storage didn't yield a URL, fallback to local file or base64
+    if (!publicUrl) {
+      try {
+        const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true })
+        }
+        const destPath = path.join(uploadsDir, filename)
+        fs.writeFileSync(destPath, buffer)
+        publicUrl = `/uploads/${filename}`
+      } catch (fsErr) {
+        const base64 = buffer.toString('base64')
+        publicUrl = `data:${mime};base64,${base64}`
+      }
     }
 
     return NextResponse.json({

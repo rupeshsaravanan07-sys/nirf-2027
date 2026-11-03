@@ -125,10 +125,14 @@ export default function StudentsDirectoryPage() {
       const data = await res.json()
       if (res.ok) {
         toast({
-          title: "Status Updated",
-          description: `Submission marked as ${verifyStatus}.`,
+          title: "Verified & Saved to Database",
+          description: `Submission is permanently saved as "${verifyStatus.toUpperCase()}". It is now listed under the "Verified" filter.`,
           variant: "success",
         })
+        // If they were on "pending_verification" filter, switch to 'all' so student stays visible
+        if (status === 'pending_verification') {
+          setStatus('all')
+        }
         openStudentDetail(selectedStudentId!)
         fetchStudents()
       } else {

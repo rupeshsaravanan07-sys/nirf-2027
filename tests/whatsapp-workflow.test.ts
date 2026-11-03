@@ -69,6 +69,8 @@ describe('WhatsApp Campaign & Proctor Escalation Workflow', () => {
       }
       db.students.push(testStudent)
     }
+    const db = (await import('../src/lib/data-store')).loadDB()
+    db.reminders = db.reminders.filter((r) => r.student_id !== testStudent.id)
     testStudent.reminder_count = 0
     assert.strictEqual(!!testStudent, true)
 

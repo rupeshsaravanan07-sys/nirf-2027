@@ -154,7 +154,6 @@ function saveDB() {
 export async function initializeDataStore(): Promise<void> {
   const db = loadDB()
   if (db.initialized && db.students.length > 0) return
-  db.initialized = true
 
   try {
     const supabase = createAdminClient()
@@ -168,7 +167,14 @@ export async function initializeDataStore(): Promise<void> {
       const { data: supaSubs } = await (supabase.from('progression_submissions') as any).select('*')
       if (supaSubs && supaSubs.length > 0) {
         for (const s of supaSubs) {
-          if (!db.submissions.some((sub) => sub.id === s.id)) {
+          const idx = db.submissions.findIndex((sub) => sub.id === s.id)
+          if (idx >= 0) {
+            const localTime = new Date(db.submissions[idx].updated_at || db.submissions[idx].submitted_at).getTime()
+            const remoteTime = new Date(s.updated_at || s.submitted_at).getTime()
+            if (remoteTime >= localTime) {
+              db.submissions[idx] = s
+            }
+          } else {
             db.submissions.push(s)
           }
         }
@@ -178,6 +184,7 @@ export async function initializeDataStore(): Promise<void> {
     // Supabase unavailable, continue with local db
   }
 
+  db.initialized = true
   saveDB()
 }
 
@@ -748,10 +755,15 @@ export async function getStudentByToken(token: string): Promise<{
     try {
       const supabase = createAdminClient()
       if (supabase) {
-        let { data } = await (supabase.from('students') as any)
-          .select('*')
-          .eq('form_access_token', cleanToken)
-          .maybeSingle()
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanToken)
+        let data = null
+        if (isUuid) {
+          const res = await (supabase.from('students') as any)
+            .select('*')
+            .eq('form_access_token', cleanToken)
+            .maybeSingle()
+          data = res.data
+        }
         if (!data) {
           const res = await (supabase.from('students') as any)
             .select('*')
@@ -788,12 +800,47 @@ export async function getStudentDetail(id: string) {
   await initializeDataStore()
   const db = loadDB()
 
-  const student = db.students.find((s) => s.id === id)
+  let student = db.students.find((s) => s.id === id)
+  if (!student) {
+    try {
+      const supabase = createAdminClient()
+      if (supabase) {
+        const { data: supaStudent } = await (supabase.from('students') as any)
+          .select('*')
+          .eq('id', id)
+          .maybeSingle()
+        if (supaStudent) {
+          student = supaStudent as Student
+          db.students.push(student)
+        }
+      }
+    } catch (e) {}
+  }
   if (!student) return null
 
-  const submissions = db.submissions
+  let submissions = db.submissions
     .filter((s) => s.student_id === id)
     .sort((a, b) => b.submission_version - a.submission_version)
+
+  if (submissions.length === 0) {
+    try {
+      const supabase = createAdminClient()
+      if (supabase) {
+        const { data: supaSubs } = await (supabase.from('progression_submissions') as any)
+          .select('*')
+          .eq('student_id', id)
+          .order('submission_version', { ascending: false })
+        if (supaSubs && supaSubs.length > 0) {
+          submissions = supaSubs
+          for (const ss of supaSubs) {
+            if (!db.submissions.some((sub) => sub.id === ss.id)) {
+              db.submissions.push(ss)
+            }
+          }
+        }
+      }
+    } catch (e) {}
+  }
 
   const originalResponses = db.original_responses.filter(
     (r) => r.student_id === id || r.register_number === student.register_number
@@ -848,10 +895,15 @@ export async function submitStudentProgression(data: {
     try {
       const supabase = createAdminClient()
       if (supabase) {
-        let { data: st } = await (supabase.from('students') as any)
-          .select('*')
-          .eq('form_access_token', cleanToken)
-          .maybeSingle()
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanToken)
+        let st = null
+        if (isUuid) {
+          const res = await (supabase.from('students') as any)
+            .select('*')
+            .eq('form_access_token', cleanToken)
+            .maybeSingle()
+          st = res.data
+        }
         if (!st) {
           const res = await (supabase.from('students') as any)
             .select('*')
@@ -972,7 +1024,22 @@ export async function updateSubmissionVerification(
   await initializeDataStore()
   const db = loadDB()
 
-  const sub = db.submissions.find((s) => s.id === submissionId)
+  let sub = db.submissions.find((s) => s.id === submissionId)
+  if (!sub) {
+    try {
+      const supabase = createAdminClient()
+      if (supabase) {
+        const { data: supaSub } = await (supabase.from('progression_submissions') as any)
+          .select('*')
+          .eq('id', submissionId)
+          .maybeSingle()
+        if (supaSub) {
+          db.submissions.push(supaSub)
+          sub = supaSub
+        }
+      }
+    } catch (e) {}
+  }
   if (!sub) return false
 
   sub.verification_status = status
