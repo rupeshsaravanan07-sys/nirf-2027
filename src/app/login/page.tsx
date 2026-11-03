@@ -7,15 +7,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ShieldCheck, GraduationCap, ArrowRight, Loader2, KeyRound } from "lucide-react"
+import { ShieldCheck, GraduationCap, ArrowRight, Loader2 } from "lucide-react"
 
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirectTo') || '/admin'
 
-  const [email, setEmail] = React.useState('admin@vit.ac.in')
-  const [password, setPassword] = React.useState('admin123')
+  const [email, setEmail] = React.useState('')
+  const [password, setPassword] = React.useState('')
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -87,13 +87,10 @@ function LoginForm() {
             />
           </div>
 
-          <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-lg text-xs text-blue-800 dark:text-blue-300 space-y-1">
-            <p className="font-semibold flex items-center gap-1.5">
-              <KeyRound className="h-3.5 w-3.5" />
-              Administrator Credentials:
+          <div className="text-center pt-2">
+            <p className="text-xs text-slate-400">
+              Authorized university personnel only. All access attempts are logged.
             </p>
-            <p>Email: <span className="font-mono font-medium">admin@vit.ac.in</span></p>
-            <p>Password: <span className="font-mono font-medium">admin123</span></p>
           </div>
         </CardContent>
 
