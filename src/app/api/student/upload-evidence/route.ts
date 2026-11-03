@@ -18,20 +18,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File size exceeds 10MB limit' }, { status: 400 })
     }
 
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true })
-    }
-
     const ext = path.extname(file.name) || '.pdf'
     const cleanReg = regNo.replace(/[^a-zA-Z0-9]/g, '')
     const filename = `${cleanReg}_${uuidv4().substring(0, 8)}${ext}`
-    const destPath = path.join(uploadsDir, filename)
-
     const arrayBuffer = await file.arrayBuffer()
-    fs.writeFileSync(destPath, Buffer.from(arrayBuffer))
 
-    const publicUrl = `/uploads/${filename}`
+    let publicUrl = ''
+
+    // Attempt local file write (works on local dev)
+    try {
+      const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true })
+      }
+      const destPath = path.join(uploadsDir, filename)
+      fs.writeFileSync(destPath, Buffer.from(arrayBuffer))
+      publicUrl = `/uploads/${filename}`
+    } catch (fsErr) {
+      // In serverless / Vercel cloud with read-only filesystem:
+      // Store as clean base64 data URL so it renders instantly in <img> and download links
+      const mime = file.type || 'application/octet-stream'
+      const base64 = Buffer.from(arrayBuffer).toString('base64')
+      publicUrl = `data:${mime};base64,${base64}`
+    }
 
     return NextResponse.json({
       success: true,

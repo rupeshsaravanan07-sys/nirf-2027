@@ -5,6 +5,7 @@ import ExcelJS from 'exceljs'
 import { parseExcelWorkbook, type ImportPreview, type ParsedStudent, type ParsedResponse } from './excel-import'
 import { generateSubmissionReference, normalizeRegisterNumber } from './utils'
 import { renderWhatsAppMessage, DEFAULT_WHATSAPP_TEMPLATE } from './whatsapp'
+import { createAdminClient } from './supabase/server'
 import type {
   Student,
   ProgressionSubmission,
@@ -40,8 +41,12 @@ interface InMemoryDB {
 let memoryDB: InMemoryDB | null = null
 
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true })
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+    }
+  } catch (e) {
+    // Read-only filesystem in cloud serverless environment
   }
 }
 
@@ -82,8 +87,12 @@ function loadDB(): InMemoryDB {
 
 function saveDB() {
   if (!memoryDB) return
-  ensureDataDir()
-  fs.writeFileSync(DB_FILE, JSON.stringify(memoryDB, null, 2), 'utf-8')
+  try {
+    ensureDataDir()
+    fs.writeFileSync(DB_FILE, JSON.stringify(memoryDB, null, 2), 'utf-8')
+  } catch (e) {
+    // Read-only filesystem in cloud serverless environment (Vercel)
+  }
 }
 
 // Initialize database with the provided Excel file if not already initialized
@@ -266,6 +275,84 @@ export async function commitImportPreview(preview: ImportPreview, uploadedBy: st
 
   db.initialized = true
   saveDB()
+
+  // Sync to Supabase in chunks if service key is configured
+  try {
+    const supabase = createAdminClient()
+    if (supabase) {
+      // 1. Batch upsert students in chunks of 100
+      if (preview.students && preview.students.length > 0) {
+        const studentBatch = preview.students.map((ps) => {
+          const s = studentMap.get(ps.register_number)
+          return {
+            id: s?.id || uuidv4(),
+            register_number: ps.register_number,
+            student_name: ps.student_name,
+            mobile_number: ps.mobile_number,
+            alternate_mobile_number: ps.alternate_mobile_number,
+            email: ps.email,
+            department: ps.department || 'SCOPE',
+            programme: ps.programme,
+            school: ps.school || 'SCOPE',
+            proctor_name: ps.proctor_name,
+            proctor_employee_id: ps.proctor_employee_id,
+            source_status: ps.source_status,
+            form_access_token: s?.form_access_token || uuidv4(),
+            is_eligible: ps.is_eligible,
+            original_source_data: ps.original_source_data,
+          }
+        })
+
+        for (let i = 0; i < studentBatch.length; i += 100) {
+          const chunk = studentBatch.slice(i, i + 100)
+          await supabase.from('students').upsert(chunk, { onConflict: 'register_number' })
+        }
+      }
+
+      // 2. Batch insert original responses in chunks of 100
+      if (preview.responses && preview.responses.length > 0) {
+        const respBatch = preview.responses.map((pr) => {
+          const student = studentMap.get(pr.register_number)
+          return {
+            id: uuidv4(),
+            student_id: student ? student.id : null,
+            register_number: pr.register_number,
+            source_sheet: pr.source_sheet,
+            original_row_number: pr.original_row_number,
+            original_response_data: pr.original_response_data,
+            source_timestamp: pr.source_timestamp,
+            import_log_id: importLogId,
+          }
+        })
+
+        for (let i = 0; i < respBatch.length; i += 100) {
+          const chunk = respBatch.slice(i, i + 100)
+          await supabase.from('original_responses').insert(chunk)
+        }
+      }
+
+      // 3. Insert import log record
+      await supabase.from('import_logs').insert({
+        id: importLogId,
+        filename: preview.filename,
+        file_size_bytes: preview.file_size_bytes,
+        uploaded_by: uploadedBy,
+        upload_date: new Date().toISOString(),
+        total_rows: preview.total_students,
+        imported_rows: newStudentCount,
+        duplicate_rows: preview.duplicate_register_numbers.length,
+        unmatched_responses: preview.unmatched_responses_count,
+        import_status: 'completed',
+        import_summary: {
+          matched_responses: preview.matched_responses_count,
+          unmatched_responses: preview.unmatched_responses_count,
+          total_students: db.students.length,
+        },
+      })
+    }
+  } catch (supabaseErr) {
+    console.error('Error syncing import preview to Supabase:', supabaseErr)
+  }
 
   return {
     imported_students: newStudentCount,
