@@ -56,8 +56,24 @@ function ensureDataDir() {
 function loadDB(): InMemoryDB {
   if (memoryDB) return memoryDB
   ensureDataDir()
-  
-  // 1. Try loading from writable DB_FILE (/tmp on Vercel, or local .data)
+
+  // 1. Check seed file first (committed repository state)
+  if (fs.existsSync(SEED_FILE)) {
+    try {
+      const content = fs.readFileSync(SEED_FILE, 'utf-8')
+      const parsed = JSON.parse(content)
+      // If seed file was reset to 0 students, use it immediately
+      if (Array.isArray(parsed.students) && parsed.students.length === 0) {
+        memoryDB = parsed
+        saveDB()
+        return memoryDB!
+      }
+    } catch (e) {
+      console.error('Failed to parse seed db.json...', e)
+    }
+  }
+
+  // 2. Try loading from writable DB_FILE (/tmp on Vercel, or local .data)
   if (fs.existsSync(DB_FILE)) {
     try {
       const content = fs.readFileSync(DB_FILE, 'utf-8')
@@ -68,7 +84,7 @@ function loadDB(): InMemoryDB {
     }
   }
 
-  // 2. If running on Vercel and /tmp doesn't have it yet, seed from project repository
+  // 3. Fallback to seed file
   if (fs.existsSync(SEED_FILE)) {
     try {
       const content = fs.readFileSync(SEED_FILE, 'utf-8')
@@ -96,10 +112,32 @@ function loadDB(): InMemoryDB {
       },
     ],
     import_logs: [],
-    initialized: false,
+    initialized: true,
   }
   saveDB()
   return memoryDB
+}
+
+export function resetDataStore() {
+  memoryDB = {
+    students: [],
+    submissions: [],
+    original_responses: [],
+    reminders: [],
+    communication_logs: [],
+    escalations: [],
+    templates: [
+      {
+        id: uuidv4(),
+        name: 'Default NIRF Reminder',
+        template_text: DEFAULT_WHATSAPP_TEMPLATE,
+        is_default: true,
+      },
+    ],
+    import_logs: [],
+    initialized: true,
+  }
+  saveDB()
 }
 
 function saveDB() {
