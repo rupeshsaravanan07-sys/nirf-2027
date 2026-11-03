@@ -443,6 +443,41 @@ export default function ExcelImportPage() {
                 </div>
               )}
             </CardContent>
+            <CardFooter className="bg-slate-50 dark:bg-slate-900 border-t p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+                Ready to save <strong className="text-slate-900 dark:text-white">{preview.total_students} students</strong> and <strong className="text-slate-900 dark:text-white">{preview.total_responses} responses</strong> into your database.
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPreview(null)
+                    setFile(null)
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="default"
+                  disabled={committing}
+                  onClick={handleConfirmImport}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 shadow-md"
+                >
+                  {committing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving to Database...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      Save & Commit into Database
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardFooter>
           </Card>
         </div>
       )}
