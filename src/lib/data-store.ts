@@ -730,7 +730,7 @@ export async function getStudents(options: GetStudentsOptions = {}) {
   }
 }
 
-// Student by Token (for Public Form)
+// Student by Token or Register Number (for Public Form)
 export async function getStudentByToken(token: string): Promise<{
   student: Student | null
   existing_submission: ProgressionSubmission | null
@@ -738,15 +738,27 @@ export async function getStudentByToken(token: string): Promise<{
   await initializeDataStore()
   const db = loadDB()
 
-  let student = db.students.find((s) => s.form_access_token === token)
+  const cleanToken = token.trim()
+  let student = db.students.find(
+    (s) =>
+      s.form_access_token === cleanToken ||
+      s.register_number.toLowerCase() === cleanToken.toLowerCase()
+  )
   if (!student) {
     try {
       const supabase = createAdminClient()
       if (supabase) {
-        const { data } = await (supabase.from('students') as any)
+        let { data } = await (supabase.from('students') as any)
           .select('*')
-          .eq('form_access_token', token)
+          .eq('form_access_token', cleanToken)
           .maybeSingle()
+        if (!data) {
+          const res = await (supabase.from('students') as any)
+            .select('*')
+            .ilike('register_number', cleanToken)
+            .maybeSingle()
+          data = res.data
+        }
         if (data) {
           student = data as Student
           if (!db.students.find((s) => s.id === student!.id)) {
@@ -826,7 +838,39 @@ export async function submitStudentProgression(data: {
   await initializeDataStore()
   const db = loadDB()
 
-  const student = db.students.find((s) => s.form_access_token === data.form_access_token)
+  const cleanToken = data.form_access_token.trim()
+  let student = db.students.find(
+    (s) =>
+      s.form_access_token === cleanToken ||
+      s.register_number.toLowerCase() === cleanToken.toLowerCase()
+  )
+  if (!student) {
+    try {
+      const supabase = createAdminClient()
+      if (supabase) {
+        let { data: st } = await (supabase.from('students') as any)
+          .select('*')
+          .eq('form_access_token', cleanToken)
+          .maybeSingle()
+        if (!st) {
+          const res = await (supabase.from('students') as any)
+            .select('*')
+            .ilike('register_number', cleanToken)
+            .maybeSingle()
+          st = res.data
+        }
+        if (st) {
+          student = st as Student
+          if (!db.students.find((s) => s.id === student!.id)) {
+            db.students.push(student)
+          }
+        }
+      }
+    } catch (e) {
+      // Supabase unavailable
+    }
+  }
+
   if (!student) {
     return { success: false, error: 'Invalid or expired student link' }
   }

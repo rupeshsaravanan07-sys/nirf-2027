@@ -284,7 +284,7 @@ function StudentFormContent() {
                 Access Your Progression Record
               </CardTitle>
               <CardDescription>
-                Enter the personal invitation token sent to your WhatsApp or institutional email.
+                Enter your Register Number (e.g. 21MIS1137) or the personal invitation token sent to your WhatsApp/email.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -297,11 +297,11 @@ function StudentFormContent() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="token">Personal Access Token</Label>
+                <Label htmlFor="token">Register Number or Access Token</Label>
                 <div className="flex gap-2">
                   <Input
                     id="token"
-                    placeholder="Paste your individual access token (e.g. uuid-format)"
+                    placeholder="Enter Register Number (e.g. 21MIS1137) or Access Token"
                     value={tokenInput}
                     onChange={(e) => setTokenInput(e.target.value)}
                   />

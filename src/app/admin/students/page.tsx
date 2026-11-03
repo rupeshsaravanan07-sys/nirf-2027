@@ -275,7 +275,19 @@ export default function StudentsDirectoryPage() {
                 ) : students.length === 0 ? (
                   <tr>
                     <td colSpan={10} className="py-12 text-center text-slate-500">
-                      No students matched the active search or filter criteria.
+                      <div className="space-y-2">
+                        <p className="font-medium text-slate-700 dark:text-slate-300">
+                          {search ? `No student found matching "${search}".` : 'No student records in the database.'}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {search ? 'Try clearing your search or checking the register number.' : 'Import your cohort Excel spreadsheet at '}
+                          {!search && (
+                            <a href="/admin/import" className="text-blue-600 dark:text-blue-400 font-semibold underline">
+                              Admin &gt; Import Data
+                            </a>
+                          )}
+                        </p>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -350,13 +362,13 @@ export default function StudentsDirectoryPage() {
                         </td>
                         <td className="py-3 px-4 text-right space-x-1 shrink-0">
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
-                            className="h-7 text-xs px-2"
+                            className="h-7 text-xs px-2.5 bg-blue-50/80 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 dark:border-blue-800 font-semibold"
                             onClick={() => openStudentDetail(s.id)}
                           >
                             <Eye className="h-3.5 w-3.5 mr-1" />
-                            View
+                            View & Verify
                           </Button>
                           <Button
                             variant="outline"
