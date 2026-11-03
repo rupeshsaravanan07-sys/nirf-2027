@@ -45,7 +45,30 @@ describe('WhatsApp Campaign & Proctor Escalation Workflow', () => {
     const allEscalations = await getEscalations()
     const escalatedIds = new Set(allEscalations.map((e) => e.student_id))
     const studentList = await getStudents({ status: 'pending', limit: 100 })
-    const testStudent = studentList.students.find((s) => !escalatedIds.has(s.id)) || studentList.students[10]
+    let testStudent = studentList.students.find((s) => !escalatedIds.has(s.id))
+    if (!testStudent) {
+      const db = (await import('../src/lib/data-store')).loadDB()
+      testStudent = {
+        id: 'test-student-id-esc',
+        register_number: 'TEST_ESC_2026',
+        student_name: 'Escalation Student',
+        mobile_number: '9876543219',
+        alternate_mobile_number: null,
+        email: 'esc@vit.ac.in',
+        department: 'SCOPE',
+        programme: 'B.Tech CSE',
+        school: 'SCOPE',
+        proctor_name: 'Dr. Mentor',
+        proctor_employee_id: '50002',
+        source_status: 'Active',
+        form_access_token: 'esc-token-456',
+        reminder_count: 0,
+        is_eligible: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      db.students.push(testStudent)
+    }
     testStudent.reminder_count = 0
     assert.strictEqual(!!testStudent, true)
 

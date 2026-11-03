@@ -32,19 +32,36 @@ export function renderWhatsAppMessage(
   context: WhatsAppMessageContext
 ): string {
   let message = templateText
-  const replacements: Record<string, string> = {
-    '{{student_name}}': context.student_name || 'Student',
-    '{{register_number}}': context.register_number || '',
-    '{{student_form_link}}': context.student_form_link || '',
-    '{{department}}': context.department || 'SCOPE',
-    '{{programme}}': context.programme || '',
-    '{{proctor_name}}': context.proctor_name || 'Your Assigned Proctor',
-    '{{reminder_number}}': String(context.reminder_number || 1),
-    '{{max_reminders}}': String(context.max_reminders || 3),
-  }
 
-  for (const [placeholder, value] of Object.entries(replacements)) {
-    message = message.split(placeholder).join(value)
+  const link = context.student_form_link || ''
+  const name = context.student_name || 'Student'
+  const regNo = context.register_number || ''
+  const dept = context.department || 'SCOPE'
+  const prog = context.programme || ''
+  const proctor = context.proctor_name || 'Your Assigned Proctor'
+  const reminderNum = String(context.reminder_number || 1)
+  const maxReminders = String(context.max_reminders || 3)
+
+  const replacements: [RegExp, string][] = [
+    // Link variations (e.g. {{form_link}}, {form_link}, {{student_form_link}}, {student_form_link}, {{link}}, {link})
+    [/\{\{?(?:student_form_link|form_link|student_link|link|url)\}\}?/gi, link],
+    // Student name variations (e.g. {{student_name}}, {student_name}, {{name}}, {name})
+    [/\{\{?(?:student_name|name)\}\}?/gi, name],
+    // Register number variations (e.g. {{register_number}}, {register_number}, {{reg_no}}, {reg_no}, {{roll_number}})
+    [/\{\{?(?:register_number|reg_no|roll_no|roll_number)\}\}?/gi, regNo],
+    // Proctor name variations
+    [/\{\{?(?:proctor_name|proctor)\}\}?/gi, proctor],
+    // Department variations
+    [/\{\{?department\}\}?/gi, dept],
+    // Programme variations
+    [/\{\{?programme\}\}?/gi, prog],
+    // Reminder numbers
+    [/\{\{?reminder_number\}\}?/gi, reminderNum],
+    [/\{\{?max_reminders\}\}?/gi, maxReminders],
+  ]
+
+  for (const [regex, value] of replacements) {
+    message = message.replace(regex, value)
   }
 
   return message

@@ -20,11 +20,30 @@ describe('Student Form & Versioning Workflow', () => {
   it('allows a student to submit their progression outcome and increments submission version', async () => {
     await initializeDataStore()
 
-    // Find student with token
-    const detail = await getStudentDetail((await import('../src/lib/data-store')).loadDB?.().students[0].id || '')
-    // or get first student from data-store
-    const studentList = await (await import('../src/lib/data-store')).getStudents({ limit: 1 })
-    const testStudent = studentList.students[0]
+    let studentList = await (await import('../src/lib/data-store')).getStudents({ limit: 1 })
+    let testStudent = studentList.students[0]
+    if (!testStudent) {
+      const db = (await import('../src/lib/data-store')).loadDB()
+      testStudent = {
+        id: 'test-student-id-1',
+        register_number: 'TEST2026',
+        student_name: 'Test Student',
+        mobile_number: '9876543210',
+        alternate_mobile_number: null,
+        email: 'test@vit.ac.in',
+        department: 'SCOPE',
+        programme: 'B.Tech CSE',
+        school: 'SCOPE',
+        proctor_name: 'Dr. Test Proctor',
+        proctor_employee_id: '50001',
+        source_status: 'Active',
+        form_access_token: 'test-token-123',
+        is_eligible: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      db.students.push(testStudent)
+    }
 
     // Submit outcome
     const sub1 = await submitStudentProgression({

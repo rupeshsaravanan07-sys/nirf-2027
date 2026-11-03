@@ -53,7 +53,7 @@ function ensureDataDir() {
   }
 }
 
-function loadDB(): InMemoryDB {
+export function loadDB(): InMemoryDB {
   if (memoryDB) return memoryDB
   ensureDataDir()
 
@@ -881,7 +881,10 @@ export async function generateWhatsAppReminders(params: {
   await initializeDataStore()
   const db = loadDB()
 
-  const appUrl = params.app_url || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const appUrl =
+    params.app_url ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://nirf-2027.vercel.app')
   const template =
     db.templates.find((t) => t.id === params.template_id) ||
     db.templates.find((t) => t.is_default) ||
@@ -899,6 +902,10 @@ export async function generateWhatsAppReminders(params: {
   for (const student of targetStudents) {
     const existingReminders = db.reminders.filter((r) => r.student_id === student.id)
     const nextReminderNum = existingReminders.length + 1
+
+    if (!student.form_access_token) {
+      student.form_access_token = uuidv4()
+    }
 
     const studentFormLink = `${appUrl}/student-form?token=${student.form_access_token}`
 
