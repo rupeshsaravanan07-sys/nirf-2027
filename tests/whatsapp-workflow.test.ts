@@ -41,9 +41,12 @@ describe('WhatsApp Campaign & Proctor Escalation Workflow', () => {
   it('triggers proctor escalation automatically after 3 confirmed sent reminders', async () => {
     await initializeDataStore()
 
-    // Find a pending student who has 0 reminders
-    const studentList = await getStudents({ status: 'pending', limit: 50 })
-    const testStudent = studentList.students.find((s) => s.reminder_count === 0) || studentList.students[0]
+    // Find a pending student without an existing escalation
+    const allEscalations = await getEscalations()
+    const escalatedIds = new Set(allEscalations.map((e) => e.student_id))
+    const studentList = await getStudents({ status: 'pending', limit: 100 })
+    const testStudent = studentList.students.find((s) => !escalatedIds.has(s.id)) || studentList.students[10]
+    testStudent.reminder_count = 0
     assert.strictEqual(!!testStudent, true)
 
     // Generate reminders for this test student
