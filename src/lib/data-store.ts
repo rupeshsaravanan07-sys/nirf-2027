@@ -345,10 +345,10 @@ export async function commitImportPreview(
           declaration_accepted: true,
           submitted_at: pr.source_timestamp || new Date().toISOString(),
           submission_reference: generateSubmissionReference(),
-          verification_status: pr.proof_link ? 'verified' : 'pending',
-          verified_by: pr.proof_link ? 'System Auto-Verified' : null,
-          verified_at: pr.proof_link ? new Date().toISOString() : null,
-          admin_notes: 'Imported from initial Form Responses sheet',
+          verification_status: 'verified',
+          verified_by: 'Pre-Verified (From Excel)',
+          verified_at: pr.source_timestamp || new Date().toISOString(),
+          admin_notes: 'Imported from initial Form Responses sheet - Pre-Verified (No verification needed)',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -431,9 +431,18 @@ export async function commitImportPreview(
           const chunk = respBatch.slice(i, i + 100)
           await (supabase.from('original_responses') as any).insert(chunk)
         }
+
+        // 3. Batch upsert progression_submissions for pre-verified responses
+        const importedSubs = db.submissions.filter((s) => s.admin_notes?.includes('Imported from initial Form Responses sheet'))
+        if (importedSubs.length > 0) {
+          for (let i = 0; i < importedSubs.length; i += 100) {
+            const chunk = importedSubs.slice(i, i + 100)
+            await (supabase.from('progression_submissions') as any).upsert(chunk, { onConflict: 'id' })
+          }
+        }
       }
 
-      // 3. Insert import log record
+      // 4. Insert import log record
       await (supabase.from('import_logs') as any).insert({
         id: importLogId,
         filename: preview.filename,
@@ -1433,7 +1442,7 @@ export async function generateMasterExcelExport(): Promise<Buffer> {
       role,
       compensation: comp,
       campus,
-      verified: sub?.verification_status?.toUpperCase() || 'N/A',
+      verified: sub ? 'VERIFIED' : 'NOT SUBMITTED',
       proof: sub?.evidence_storage_path || '',
       reminders: reminderCounts.get(s.id) || 0,
       escalated: escSet.has(s.id) ? 'YES (Proctor)' : 'NO',
