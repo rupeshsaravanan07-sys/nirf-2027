@@ -39,15 +39,16 @@ export async function POST(request: NextRequest) {
             .maybeSingle()
 
           if (adminUser) {
+            const userObj = adminUser as any
             // Validate password against stored hash or fallback
-            if (adminUser.password_hash && adminUser.password_hash === cleanPassword) {
+            if (userObj.password_hash && userObj.password_hash === cleanPassword) {
               isAuthorized = true
-              userName = adminUser.name || 'NIRF Staff'
-              userRole = adminUser.role || 'admin'
+              userName = userObj.name || 'NIRF Staff'
+              userRole = userObj.role || 'admin'
             } else if (cleanPassword === configuredPassword) {
               isAuthorized = true
-              userName = adminUser.name || 'NIRF Staff'
-              userRole = adminUser.role || 'admin'
+              userName = userObj.name || 'NIRF Staff'
+              userRole = userObj.role || 'admin'
             }
           }
         }

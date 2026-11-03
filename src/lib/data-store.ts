@@ -377,7 +377,7 @@ export async function commitImportPreview(
 
         for (let i = 0; i < studentBatch.length; i += 100) {
           const chunk = studentBatch.slice(i, i + 100)
-          await supabase.from('students').upsert(chunk, { onConflict: 'register_number' })
+          await (supabase.from('students') as any).upsert(chunk, { onConflict: 'register_number' })
         }
       }
 
@@ -399,12 +399,12 @@ export async function commitImportPreview(
 
         for (let i = 0; i < respBatch.length; i += 100) {
           const chunk = respBatch.slice(i, i + 100)
-          await supabase.from('original_responses').insert(chunk)
+          await (supabase.from('original_responses') as any).insert(chunk)
         }
       }
 
       // 3. Insert import log record
-      await supabase.from('import_logs').insert({
+      await (supabase.from('import_logs') as any).insert({
         id: importLogId,
         filename: preview.filename,
         file_size_bytes: preview.file_size_bytes,

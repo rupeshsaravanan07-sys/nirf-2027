@@ -139,6 +139,7 @@ export interface AdminUser {
   name: string
   email: string
   role: AdminRole
+  password_hash?: string | null
   auth_user_id: string | null
   active: boolean
   created_at: string
